@@ -1,7 +1,7 @@
 import { act } from 'react-dom/test-utils';
 import './App.css';
 import React, {useLayoutEffect, useState} from 'react'
-
+// Создает строки таблицы
 function generateRows(elements, connections) {
   return elements.map(({id, name}) => {
     const con = connections.find((c) => {
@@ -20,7 +20,7 @@ function generateRows(elements, connections) {
     </tr>
   })
 }
-
+//Создает таблицу
 function generateTable(elements, connections){
   return (
     <table>
@@ -35,12 +35,12 @@ function generateTable(elements, connections){
     </table>
   )
 }
-
 function createConnection(idcon, id1, id2, input){
   return{idcon, id1, id2, input}
 }
 
-function createElement(name, id, x, y, radius){
+function createElement(id, x, y, radius){
+  const name = "S"+id
   return {name, id, x, y, radius}
 }
 
@@ -62,7 +62,7 @@ function App() {
   const [selected, setSelected] = useState()
 
   const updateElement = (name, id, x, y, radius) => {
-    const updated = createElement(name, id, x, y, radius)
+    const updated = createElement(id, x, y, radius)
     const elementsCopy = [...elements]
     elementsCopy[id] = updated
     setElements(elementsCopy)
@@ -116,21 +116,6 @@ function App() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    /*
-    const edit = document.getElementById("editme")
-    const nameInput = document.getElementById("nameInput")
-    const selectMe = document.getElementById("selectName")
-
-    if (selected !== undefined) {
-      edit.innerText = selected.name
-      nameInput.value = selected.name
-      selectMe.hidden = false
-    } else {
-      edit.innerText = "none"
-      selectMe.hidden = true
-    }
-    */
-
     connections.forEach((con) => drawConnection(ctx, con), [connections])
     elements.forEach((element) => drawElement(ctx, element), [elements])
   }
@@ -143,7 +128,7 @@ function App() {
     const {clientX, clientY} = event
     if (action === "addingPoint"){
 
-      const element = createElement("hi", elements.length, clientX, clientY, 40)
+      const element = createElement(elements.length, clientX, clientY, 40)
       setElements( (prevState) => [...prevState, element])
       return
     }
