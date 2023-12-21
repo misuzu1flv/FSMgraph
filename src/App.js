@@ -1,166 +1,147 @@
-import { act } from 'react-dom/test-utils';
 import './App.css';
 import React, {useLayoutEffect, useState} from 'react'
+import GenerateTable from './components/table';
+import GenerateSelectedPanel from './components/selected';
+import GenerateNavbar from './components/navbar';
+import createElement from './graph/element';
+import createConnection from './graph/connection';
+
 // Создает строки таблицы
-function generateRows(elements, connections) {
-  return elements.map(({id, name}) => {
-    const con = connections.find((c) => {
-      return c.id1 === id
-    })
-    let to = {name: ""}
-    if (con !== undefined){
-      to = elements.find((e) => {
-        return e.id === con.id2
-      })
-    }
-    return <tr>
-      <td>{id}</td>
-      <td>{name}</td>
-      <td>{to.name}</td>
-    </tr>
-  })
-}
-//Создает таблицу
-function generateTable(elements, connections){
-  return (
-    <table>
-      <tr>
-        <td>id</td>
-        <td>name</td>
-        <td>next</td>
-      </tr>
-      {
-        generateRows(elements, connections)
-      }
-    </table>
-  )
-}
-function createConnection(idcon, id1, id2, input){
-  return{idcon, id1, id2, input}
-}
-
-function createElement(id, x, y, radius){
-  const name = "S"+id
-  return {name, id, x, y, radius}
-}
-
-function getElementAtPosition(x, y, elements) {
-  return elements.find((element) => isWithinElement(x, y, element))
-}
-
-function isWithinElement(x, y, element) {
-  const dx = element.x - x
-  const dy = element.y - y
-  const drs = dx**2 + dy**2
-  return drs < element.radius**2 
-}
 
 function App() {
-  const [connections, setConnections] = useState([])
-  const [elements, setElements] = useState([])
+  const [globalId, setGlobalId] = useState(0)
+  const [objects, setObjects] = useState([])
   const [action, setAction] = useState("selecting")
-  const [selected, setSelected] = useState()
+  const [selectedId, setSelected] = useState(-1)
 
-  const updateElement = (name, id, x, y, radius) => {
-    const updated = createElement(id, x, y, radius)
-    const elementsCopy = [...elements]
-    elementsCopy[id] = updated
-    setElements(elementsCopy)
+  const importElements = (data) => {
+    try {
+    console.log("data: ", data)
+    setObjects([])
+    setGlobalId(0)
+    let newObjects = []
+    data.forEach((o) => {
+      let obj = {}
+      if (o.type === "element") {
+        const {id, x, y, radius} = o
+        obj = createElement(id, x, y, radius)
+        setGlobalId(globalId+1)
+      } else {
+        const {id1, id2, id} = o
+        obj = createConnection(id1, id2, newObjects, id)
+        setGlobalId(globalId+1)
+      }
+      console.log(obj)
+      newObjects = [...newObjects, obj]
+      console.log("objects:", newObjects)
+    })
+    setObjects(newObjects)
+    console.log("objects:", objects)
+  } catch {}
   }
 
-  function drawElement(ctx, element) {
-    const {x, y, radius, name} = element
-    const path = new Path2D()
-    ctx.strokeStyle = "rgb(21,21,21)"
-    if (selected !== undefined && element.id === selected.id) {
-      ctx.strokeStyle = "blue"
+  const getObjectIndex = (objects, id) => {
+    return objects.findIndex( (o) => o.id === id)
+  }
+  const getObjectAtPosition = (x, y) => {
+    return objects.find((o) => o.isWithin(x, y, objects))
+  }
+
+  const changeInput = (e) => {
+    changeObjectName(selectedId, e.target.value)
+    refresh()
+  }
+
+  const updateObject = (object) => {
+    const id = {object}
+    const updated = { ...object } 
+    const objectsCopy = [...objects]
+    objectsCopy[getObjectIndex(objectsCopy, id)] = updated
+    setObjects(objectsCopy)
+  }
+
+  const deleteSelected = () => {
+    deleteObject(selectedId)
+    setSelected(-1)
+  }
+
+  const deleteObject = (id) => {
+    let index = getObjectIndex(objects, id)
+    let objectsCopy = [...objects]
+    if (objects[index].type === "element") {
+      const connections = objects.filter((o) => o.type === "connection" && (o.id1 === id || o.id2 === id))
+      for (let c of connections) {
+        let index = getObjectIndex(objectsCopy, c.id)
+        objectsCopy.splice(index, 1)
+      }
     }
-    path.arc(x, y, radius, 0, 2*Math.PI)
-    ctx.lineWidth = 2;
-    ctx.stroke(path)
-    ctx.font = "20px Serif";
-    ctx.textAlign = "center";
-    ctx.fillText(name, x, y); 
-    ctx.strokeStyle = "rgb(21,21,21)"
-
+    objectsCopy.splice(index, 1)
+    setObjects(objectsCopy)
   }
 
-  const drawConnection = (ctx, connection) => {
-    const {id1, id2, input} = connection
-    const rad1 = elements[id1].radius
-    const rad2 = elements[id2].radius
-    const headlen = 20
+  const changeObjectName = (id, name) => {
+    const index = getObjectIndex(objects, id)
+    objects[index].name = name
+    updateObject(objects[index])
+  }
 
-    const x1 = elements[id1].x
-    const y1 = elements[id1].y
-    const x2 = elements[id2].x
-    const y2 = elements[id2].y
-    const dx = x1-x2
-    const dy = y1-y2
-    const angle = Math.atan2(dy, dx)
-    const path = new Path2D()
-    const fromx = x1-rad1*Math.cos(angle)
-    const fromy = y1-rad1*Math.sin(angle)
-    const tox = x2+rad2*Math.cos(angle)
-    const toy = y2+rad2*Math.sin(angle)
-    path.moveTo(fromx, fromy)
-    path.lineTo(tox, toy)
-    path.lineTo(tox + headlen * Math.cos(angle + Math.PI/10), toy+ headlen * Math.sin(angle + Math.PI/7))
-    path.moveTo(tox, toy)
-    path.lineTo(tox + headlen * Math.cos(angle - Math.PI/10), toy+ headlen * Math.sin(angle - Math.PI/7))
-    ctx.stroke(path)
-    ctx.fillText(input, (x1+x2)/2, (y1+y2)/2 - 10); 
+  const moveObject =(id, x, y) => {
+    const index = getObjectIndex(objects, id)
+    objects[index].x = x
+    objects[index].y = y
+    updateObject(objects[index])
   }
 
   const refresh = () => {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    connections.forEach((con) => drawConnection(ctx, con), [connections])
-    elements.forEach((element) => drawElement(ctx, element), [elements])
+    objects.forEach((e) => {e.draw(ctx, selectedId, objects)})
   }
 
   useLayoutEffect( () => {
     refresh()
   })
 
+
   const handleMouseDown = (event) => {
     const {clientX, clientY} = event
     if (action === "addingPoint"){
-
-      const element = createElement(elements.length, clientX, clientY, 40)
-      setElements( (prevState) => [...prevState, element])
+      const element = createElement(globalId, clientX, clientY, 40)
+      setGlobalId((prevState) => prevState+1)
+      setObjects( (prevState) => [...prevState, element])
       return
     }
     if (action === "connecting") {
-      if (selected === undefined) {
+      if (selectedId === -1) {
         console.log("selecting 1st element")
-        const element = getElementAtPosition(clientX, clientY, elements)
-        if (element === undefined) {
+        const element = getObjectAtPosition(clientX, clientY, objects)
+        if (element === undefined || element.type !== 'element') {
           return
         }
-        setSelected(element)
-        console.log("selected: ", selected)
+        setSelected(element.id)
+        console.log("selected: ", selectedId)
         return
       }
       console.log("selecting 2nd element")
-      const element = getElementAtPosition(clientX, clientY, elements)
-      if (element === undefined) {
+      const element = getObjectAtPosition(clientX, clientY, objects)
+      if (element === undefined || element.type !== 'element') {
         return
       }
-      const connection = createConnection(connections.length, selected.id, element.id, "default")
-      setConnections( (prevState) => [...prevState, connection])
-      setSelected()
+      const connection = createConnection(selectedId, element.id, objects, globalId)
+      setGlobalId((prevState) => prevState + 1)
+      setObjects( (prevState) => [...prevState, connection])
+      setSelected(-1)
       setAction("selecting")
     }
     if (action === "selecting"){
-      const element = getElementAtPosition(clientX, clientY, elements)
-      console.log(element)
+      const element = getObjectAtPosition(clientX, clientY, objects)
       if (element === undefined) {
-        setSelected()
+        setSelected(-1)
         return
       }
-      setSelected(element)
+      console.log("clicked on: ", element)
+      setSelected(element.id)
       setAction("moving")
     }
 
@@ -170,9 +151,10 @@ function App() {
     const {clientX, clientY} = event
     if (action === "moving") {
       console.log("atttempt move")
-      console.log(selected.id)
-      const {name, id, radius} = selected
-      updateElement(name, id, clientX, clientY, radius)
+      console.log(selectedId)
+      const ind = getObjectIndex(objects, selectedId)
+      console.log("hell0:", objects[ind].name)
+      moveObject(selectedId,clientX, clientY)
     }
   }
  
@@ -183,54 +165,40 @@ function App() {
     setAction("selecting");
   }
 
-
-  const [inputName, setInputName] = useState("")
+  const handleKeyDown = (event) => {
+    if (event.key === "Delete") {
+      console.log("Attempt delete")
+      if (selectedId !== -1) {
+        deleteSelected()
+      }
+    }
+  }
 
   return (
     <div>
-      <div className="buttonPanel">
-        <button onClick={() => setAction("addingPoint")}>
-          Create
-        </button>
-        <button onClick={() => {
-          setAction("connecting")
-          setSelected()
-        }}>
-          Connect
-        </button>
-      </div>
-      <div className = "sidePanel">
-        <p>Selected: { selected !== undefined ? selected.id : "none"}</p>
-        { 
-          selected !== undefined &&
-          <p>Name: <input type="text" 
-          onChange={(e) => {
-            setInputName(e.target.value)
-            console.log(e.target.value)
-            console.log(elements[selected.id])
-            elements[selected.id].name = e.target.value
-            refresh()
-          }} 
-          value = {selected.name}
-          style={{width: 60}}/> 
-          </p>
-        }
-      
-      </div>
-      <div className="tablePanel">
-        {generateTable(elements, connections)}
-      </div>
+          <GenerateNavbar
+            objects={objects}
+            importElements={importElements}
+            action1 = {() => setAction("addingPoint")} 
+            action2 = {() => {
+              setAction("connecting")
+              setSelected(-1)
+            }} />
+      <GenerateSelectedPanel selectedId={selectedId} objects={objects} changeInput={changeInput} deleteSelected={deleteSelected} />
+      <GenerateTable objects={objects} />
       <canvas 
+        tabIndex = '0'
         id="canvas" 
         width={window.innerWidth}
         height={window.innerHeight}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onKeyDown={handleKeyDown}
       > 
         CAnvas
       </canvas>
-      </div>
+    </div>
   );
 }
 export default App;
